@@ -290,7 +290,7 @@ project procurement resources).
 
 | Run analysis (input validation) | About / architecture |
 |---|---|
-| ![Run analysis](docs/screenshots/run_analysis.png) | ![About](docs/screenshots/about.png) |
+| ![Run analysis](docs/screenshots/run_analysis.svg) | ![About](docs/screenshots/about.svg) |
 
 ## 10. Known Limitations & Future Improvements
 
