@@ -110,7 +110,8 @@ def _emit_tool_events(agent: str, block, result_json: str, is_error: bool, emit:
         ]
         emit(make_event(agent, "evidence", f"Retrieved {len(results)} passages", detail=sources))
     else:
-        emit(make_event(agent, "tool_result", f"Tool `{block.name}` succeeded", detail=result_json[:600]))
+        emit(make_event(agent, "tool_result", f"Tool `{block.name}` succeeded",
+                        detail=json.loads(result_json)))
 
 
 def run_tool_loop(
