@@ -36,5 +36,10 @@ RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "5"))
 
 
 def api_key_present() -> bool:
-    """True when an Anthropic credential is configured."""
+    """True when an Anthropic credential is configured.
+
+    Re-reads .env so a key added while the app is running is picked up on
+    the next rerun without restarting the process.
+    """
+    load_dotenv(override=False)
     return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))

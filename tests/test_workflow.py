@@ -6,6 +6,7 @@ replaced with deterministic fakes, so these tests need no API key.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -68,8 +69,13 @@ def _findings_for(supplier: str) -> SupplierFindings:
 
 
 def _empty_run(**kwargs) -> AgentRunResult:
-    # Mirror the real loop: the transcript starts with the user prompt.
-    messages = [{"role": "user", "content": kwargs.get("user_prompt", "")}]
+    # Mirror the real loop's transcript shape: it starts with the user prompt
+    # and always ends with an assistant turn (src/llm.py appends the final
+    # response content before returning).
+    messages = [
+        {"role": "user", "content": kwargs.get("user_prompt", "")},
+        {"role": "assistant", "content": [{"type": "text", "text": "research complete"}]},
+    ]
     return AgentRunResult(final_text="research complete", messages=messages)
 
 
@@ -85,7 +91,7 @@ def fake_agents(monkeypatch):
 
     # --- requirement specialist ---
     monkeypatch.setattr(requirement_specialist, "run_tool_loop",
-                        lambda **kwargs: _empty_run())
+                        lambda **kwargs: _empty_run(**kwargs))
     monkeypatch.setattr(requirement_specialist, "structured_call",
                         lambda **kwargs: REQUIREMENT_SET)
 
@@ -124,7 +130,13 @@ def fake_agents(monkeypatch):
             "recommendation": f"Award to {ALPHA}",
         })
         assert not export_err
-        run = AgentRunResult(final_text="comparison done", messages=[])
+        run = AgentRunResult(
+            final_text="comparison done",
+            messages=[
+                {"role": "user", "content": kwargs.get("user_prompt", "")},
+                {"role": "assistant", "content": [{"type": "text", "text": "comparison done"}]},
+            ],
+        )
         run.tool_calls = [
             ToolCallRecord("calculate_weighted_score", score_input, scoring, False),
             ToolCallRecord("export_comparison_csv", {}, json.loads(export_json), False),
@@ -202,11 +214,14 @@ class TestWorkflowEndToEnd:
         # Real matrix tool ran and disqualified Beta on the missing mandatory M1.
         assert final["compliance_matrix"]["supplier_stats"][BETA]["disqualified"] is True
         assert final["compliance_matrix"]["supplier_stats"][ALPHA]["disqualified"] is False
-        # Real scoring tool ranked Alpha first.
+        # The comparison result carries Alpha first, and the CSV written by the
+        # REAL export tool (fed by the REAL scoring tool) confirms the ranking.
         assert final["comparison_result"]["ranking"][0]["supplier"] == ALPHA
-        # Export file really exists.
-        assert final["export_path"] and tmp_path in type(tmp_path)(final["export_path"]).parents or \
-               str(tmp_path) in final["export_path"]
+        export = Path(final["export_path"])
+        assert export.exists() and export.parent == tmp_path
+        csv_text = export.read_text(encoding="utf-8-sig")
+        assert f"1,{ALPHA}" in csv_text  # rank 1 row from the real scoring output
+        assert "EVIDENCE TRAIL" in csv_text
         # All three specialists completed, in dependency order.
         assert final["completed_agents"] == [
             "requirement_specialist", "evidence_specialist", "comparison_specialist",
@@ -251,10 +266,14 @@ class TestWorkflowEndToEnd:
 
         final = build_workflow().invoke(initial_state("RFP-2026-014", [ALPHA, BETA], ""))
         # Guardrail redirected the invalid routings, so the pipeline still ran
-        # in dependency order, and the step bound eventually forced finalize.
+        # in dependency order — and each specialist ran exactly once (re-running
+        # a completed specialist is also an invalid delegation).
         assert final["compliance_matrix"] is not None
         assert final["comparison_result"] is not None
         assert final["status"] == "complete"
+        assert final["completed_agents"] == [
+            "requirement_specialist", "evidence_specialist", "comparison_specialist",
+        ]
         assert any("Overrode invalid routing" in e["summary"] for e in final["events"]
                    if e["kind"] == "routing")
 

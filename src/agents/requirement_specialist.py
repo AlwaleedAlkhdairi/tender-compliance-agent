@@ -61,6 +61,7 @@ def run(tender_ref: str, user_request: str, emit: EventFn) -> RequirementSet:
         system=SYSTEM,
         messages=result.messages + [{"role": "user", "content": FINALIZE}],
         output_model=RequirementSet,
+        tool_names=["search_knowledge"],
     )
 
     emit(make_event(

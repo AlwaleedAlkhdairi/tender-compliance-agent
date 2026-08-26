@@ -106,6 +106,12 @@ def run(
         system=SYSTEM,
         messages=result.messages + [{"role": "user", "content": FINALIZE}],
         output_model=ComparisonResult,
+        tool_names=[
+            "search_knowledge",
+            "search_bids",
+            "calculate_weighted_score",
+            "export_comparison_csv",
+        ],
     )
 
     best = scoring.get("best_qualified")

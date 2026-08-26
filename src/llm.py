@@ -195,11 +195,23 @@ def structured_call(
     system: str,
     messages: list | str,
     output_model: Type[M],
+    tool_names: list[str] | None = None,
 ) -> M:
-    """One call that must return a validated instance of `output_model`."""
+    """One call that must return a validated instance of `output_model`.
+
+    `tool_names` must list the tools whose `tool_use`/`tool_result` blocks
+    appear in `messages` (the API rejects transcripts that reference tools
+    the request does not define). `tool_choice: none` keeps the model from
+    answering with another tool call instead of the structured output.
+    """
     client = get_client()
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]
+    tool_kwargs = (
+        {"tools": anthropic_tool_defs(tool_names), "tool_choice": {"type": "none"}}
+        if tool_names
+        else {}
+    )
     try:
         response = client.messages.parse(
             model=config.ANTHROPIC_MODEL,
@@ -207,6 +219,7 @@ def structured_call(
             system=system,
             messages=messages,
             output_format=output_model,
+            **tool_kwargs,
         )
     except anthropic.AnthropicError as exc:
         raise _friendly_api_error(exc) from exc

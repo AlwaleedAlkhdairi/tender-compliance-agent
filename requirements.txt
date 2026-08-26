@@ -1,5 +1,5 @@
 # Core LLM + orchestration
-anthropic>=0.69.0
+anthropic>=1.0.0
 langgraph>=0.2.60
 
 # RAG

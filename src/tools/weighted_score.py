@@ -6,10 +6,13 @@ ranking rules live here in code.
 """
 
 import math
+from functools import cmp_to_key
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 TECHNICAL_CRITERION = "Technical Solution"
+FINANCIAL_CRITERION = "Financial"
+TIE_BAND = 1.0  # totals within one point are ties per the evaluation methodology
 
 
 class Scorecard(BaseModel):
@@ -86,13 +89,26 @@ def calculate_weighted_score(payload: WeightedScoreInput) -> dict:
             }
         )
 
-    # Qualified bids rank first by weighted total; ties break on the
-    # Technical Solution score per the evaluation methodology.
-    def sort_key(r):
-        technical = r["breakdown"].get(TECHNICAL_CRITERION, {}).get("score", 0.0)
-        return (r["disqualified"], -r["weighted_total"], -technical)
+    # Qualified bids rank first. Totals within TIE_BAND count as tied per the
+    # evaluation methodology: the higher Technical Solution score wins, then
+    # the lower TCO — which, under the financial formula (100 x lowest/TCO),
+    # is the higher Financial score. (Pairwise rule, applied as a comparator.)
+    def _criterion(r, name):
+        return r["breakdown"].get(name, {}).get("score", 0.0)
 
-    ranked = sorted(results, key=sort_key)
+    def compare(a, b):
+        if a["disqualified"] != b["disqualified"]:
+            return 1 if a["disqualified"] else -1
+        gap = a["weighted_total"] - b["weighted_total"]
+        if abs(gap) > TIE_BAND:
+            return -1 if gap > 0 else 1
+        for name in (TECHNICAL_CRITERION, FINANCIAL_CRITERION):
+            delta = _criterion(a, name) - _criterion(b, name)
+            if delta:
+                return -1 if delta > 0 else 1
+        return -1 if gap > 0 else (1 if gap < 0 else 0)
+
+    ranked = sorted(results, key=cmp_to_key(compare))
     for rank, result in enumerate(ranked, start=1):
         result["rank"] = rank
 

@@ -10,6 +10,7 @@ Developed for "Advanced Agentic AI Systems Engineering" at SDAIA Academy.
 """
 
 import json
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -72,17 +73,24 @@ def render_sidebar() -> dict:
     )
     st.sidebar.caption(f"Model: `{config.ANTHROPIC_MODEL}`")
 
+    # Outcome of the previous build, persisted across the rerun.
+    build_result = st.session_state.pop("kb_build_result", None)
+    if build_result:
+        ok, message = build_result
+        (st.sidebar.success if ok else st.sidebar.error)(message)
+
     if st.sidebar.button("🔁 Build / rebuild knowledge base", use_container_width=True):
         with st.sidebar.status("Ingesting documents…", expanded=False):
             try:
                 summary = rebuild_index()
-                st.sidebar.success(
+                st.session_state.kb_build_result = (
+                    True,
                     f"Indexed {summary['knowledge_chunks']} knowledge chunks and "
                     f"{summary['bid_chunks']} bid chunks for "
-                    f"{len(summary['suppliers'])} suppliers."
+                    f"{len(summary['suppliers'])} suppliers.",
                 )
             except Exception as exc:
-                st.sidebar.error(f"Ingestion failed: {exc}")
+                st.session_state.kb_build_result = (False, f"Ingestion failed: {exc}")
         st.rerun()
 
     return {"key_ok": key_ok, "kb_ok": kb_ok}
@@ -177,10 +185,16 @@ def render_matrix(state: dict) -> None:
         use_container_width=True, hide_index=True,
     )
     for supplier, stats in matrix["supplier_stats"].items():
-        if stats["disqualified"]:
+        unassessed = stats.get("mandatory_unassessed", [])
+        if stats["mandatory_missing"]:
             st.error(
                 f"**{supplier}** fails mandatory requirement(s) "
                 f"{', '.join(stats['mandatory_missing'])} → disqualified from award."
+            )
+        elif unassessed:
+            st.warning(
+                f"**{supplier}**: mandatory requirement(s) {', '.join(unassessed)} "
+                "were not assessed — the supplier cannot be qualified until they are."
             )
         else:
             st.success(f"**{supplier}** passes all mandatory requirements.")
@@ -338,7 +352,7 @@ def render_results(state: dict) -> None:
                 st.download_button(
                     "⬇️ Download supplier comparison (CSV)",
                     handle.read(),
-                    file_name=export_path.split("/")[-1],
+                    file_name=Path(export_path).name,
                     mime="text/csv",
                 )
         except OSError:
@@ -392,12 +406,21 @@ def run_analysis_tab(env: dict) -> None:
                 "Select two or more for a meaningful ranking.")
 
     if not st.button("🚀 Run compliance analysis", type="primary", disabled=not ready):
+        if st.session_state.get("last_run_error"):
+            st.warning(
+                f"The most recent run failed: {st.session_state.last_run_error} — "
+                "the results below are from the last completed case."
+                if st.session_state.get("case_state")
+                else f"The most recent run failed: {st.session_state.last_run_error}"
+            )
         if st.session_state.get("case_state"):
             render_results(st.session_state.case_state)
         return
 
     status_box = st.status("Running the multi-agent analysis…", expanded=True)
     with status_box:
+        st.caption("Please don't interact with the page while the analysis is "
+                   "running — Streamlit would restart the script and abort the run.")
         placeholder = st.empty()
     lines: list[str] = []
 
@@ -410,13 +433,16 @@ def run_analysis_tab(env: dict) -> None:
         final_state = run_case(tender["ref"], chosen, request, live_emit=live_emit)
     except AgentError as exc:
         status_box.update(label="Analysis failed", state="error")
+        st.session_state.last_run_error = str(exc)
         st.error(str(exc))
         return
     except Exception as exc:  # never show a stack trace to the user
         status_box.update(label="Analysis failed", state="error")
+        st.session_state.last_run_error = str(exc)
         st.error(f"Unexpected error while running the analysis: {exc}")
         return
 
+    st.session_state.last_run_error = None
     if final_state["status"] == "complete":
         status_box.update(label="Analysis complete", state="complete", expanded=False)
     else:
@@ -466,9 +492,15 @@ def case_qa_tab(env: dict) -> None:
             st.markdown(answer)
         except AgentError as exc:
             activity.empty()
+            failure = f"⚠️ This question could not be answered: {exc}"
+            memory.add_assistant_turn(failure)
             st.error(str(exc))
-            return
+        except Exception as exc:  # never show a stack trace to the user
+            activity.empty()
+            memory.add_assistant_turn(f"⚠️ This question could not be answered: {exc}")
+            st.error(f"Unexpected error while answering: {exc}")
 
+    # Persist the conversation (including failures) so nothing silently vanishes.
     st.session_state.case_memory = memory.to_dict()
 
 

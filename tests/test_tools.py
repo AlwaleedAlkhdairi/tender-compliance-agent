@@ -46,12 +46,29 @@ class TestComplianceMatrix:
         assert beta["disqualified"] is True
         assert beta["mandatory_missing"] == ["M1", "M4"]
 
-    def test_unassessed_pairs_are_marked(self):
+    def test_unassessed_scored_pair_is_marked_but_not_disqualifying(self):
+        # Alpha has findings for M1 and M4 only -> S2 (scored) is unassessed.
         result = build_compliance_matrix(
-            ComplianceMatrixInput(requirements=REQUIREMENTS, findings=FINDINGS[:3])
+            ComplianceMatrixInput(requirements=REQUIREMENTS, findings=FINDINGS[:2])
         )
         assert result["suppliers"] == ["Alpha"]
-        assert result["rows"][0]["cells"]["Alpha"]["status"] == "compliant"
+        s2_row = next(r for r in result["rows"] if r["requirement_id"] == "S2")
+        assert s2_row["cells"]["Alpha"]["status"] == "not_assessed"
+        stats = result["supplier_stats"]["Alpha"]
+        assert stats["counts"]["not_assessed"] == 1
+        assert stats["mandatory_unassessed"] == []
+        assert stats["disqualified"] is False
+
+    def test_unassessed_mandatory_fails_closed(self):
+        # No finding for mandatory M4 -> the supplier cannot count as qualified.
+        findings = [FINDINGS[0], FINDINGS[2]]  # Alpha: M1 compliant, S2 compliant
+        result = build_compliance_matrix(
+            ComplianceMatrixInput(requirements=REQUIREMENTS, findings=findings)
+        )
+        stats = result["supplier_stats"]["Alpha"]
+        assert stats["mandatory_unassessed"] == ["M4"]
+        assert stats["mandatory_missing"] == []
+        assert stats["disqualified"] is True
 
     def test_unknown_requirement_id_rejected(self):
         bad = FINDINGS + [{"requirement_id": "X9", "supplier": "Alpha", "status": "compliant"}]
@@ -108,6 +125,29 @@ class TestWeightedScore:
         with pytest.raises(ValidationError, match="missing criteria"):
             self.make_input(scorecards=cards)
 
+    def test_within_one_point_tie_breaks_on_technical_score(self):
+        # Methodology §6: totals within 1 point are tied; higher Technical wins.
+        result = calculate_weighted_score(WeightedScoreInput(
+            weights={"Technical Solution": 50, "Financial": 50},
+            scorecards=[
+                {"supplier": "A", "scores": {"Technical Solution": 90, "Financial": 70}},  # 80.0
+                {"supplier": "B", "scores": {"Technical Solution": 61, "Financial": 100}},  # 80.5
+            ],
+        ))
+        assert result["ranking"][0]["supplier"] == "A"  # higher Technical despite lower total
+        assert result["best_qualified"] == "A"
+
+    def test_tie_then_financial_breaks_on_lower_tco(self):
+        # Equal totals and equal Technical: higher Financial score (= lower TCO) wins.
+        result = calculate_weighted_score(WeightedScoreInput(
+            weights={"Technical Solution": 50, "Financial": 50},
+            scorecards=[
+                {"supplier": "A", "scores": {"Technical Solution": 80, "Financial": 80}},
+                {"supplier": "B", "scores": {"Technical Solution": 80, "Financial": 80.5}},
+            ],
+        ))
+        assert result["ranking"][0]["supplier"] == "B"
+
 
 class TestExportComparison:
     def test_export_writes_csv(self, tmp_path, monkeypatch):
@@ -137,6 +177,8 @@ class TestExportComparison:
         flat = ["|".join(row) for row in content]
         assert any("COMPLIANCE MATRIX" in line for line in flat)
         assert any("DISQUALIFIED" in line for line in flat)
+        assert any("EVIDENCE TRAIL" in line for line in flat)
+        assert any("valid until 2027" in line for line in flat)  # evidence quote + source
         assert any("Award to Alpha." in line for line in flat)
 
 

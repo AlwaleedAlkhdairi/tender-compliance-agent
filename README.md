@@ -232,7 +232,12 @@ python -m pytest tests/ -q
 |---|---|---|
 | `ANTHROPIC_API_KEY` | yes | Claude API access |
 | `ANTHROPIC_MODEL` | no | Model id (default `claude-opus-5`) |
+| `MAX_TOKENS` | no | Max tokens per model response (default 16000) |
 | `CHROMA_DIR`, `OUTPUT_DIR` | no | Override storage locations |
+
+Further optional tuning knobs (`MAX_SUPERVISOR_STEPS`, `MAX_AGENT_TURNS`,
+`RETRIEVAL_TOP_K`, `KNOWLEDGE_DIR`, `CASES_DIR`) are read from the
+environment too — see `src/config.py`.
 
 No real key, token or personal data is committed to this repository.
 
@@ -265,8 +270,9 @@ Evaluating **RFP-2026-014** with all three suppliers is expected to produce:
   vs. 100G required as an option, subcontracted monitoring).
 - A CSV export and a missing-evidence list per supplier.
 
-(Exact scores vary between runs; the compliance findings and arithmetic are
-deterministic.)
+(The agents' judgements — compliance statuses and per-criterion scores — can
+vary slightly between runs; the weighting arithmetic, ranking rules and
+disqualification logic are deterministic tools.)
 
 ### Failure handling you can demo
 
@@ -314,8 +320,8 @@ project procurement resources).
 The app runs fully locally. For a public URL, deploy to
 [Streamlit Community Cloud](https://share.streamlit.io/): point it at this
 repository (`app.py`), add `ANTHROPIC_API_KEY` in the app's *Secrets*
-settings, deploy, then run `scripts/ingest_knowledge.py` is not needed —
-use the sidebar's *Build knowledge base* button on first start.
+settings, and deploy. Running `scripts/ingest_knowledge.py` is not needed on
+the server — use the sidebar's *Build knowledge base* button on first start.
 **Public URL:** _add here if deployed_.
 
 ---

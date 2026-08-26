@@ -1,5 +1,15 @@
 """Case Q&A assistant for follow-up questions about a finished analysis.
 
+CONTRACT
+  Responsibility : Answer follow-up questions about the completed case.
+  Input          : The case's short-term memory + the user's question.
+  Permitted      : `search_knowledge` / `search_bids` retrieval only. May
+                   not re-run the analysis or alter any recorded finding.
+  Output         : A grounded text answer, appended to the conversation
+                   memory.
+  Completion     : The answer cites memory or retrieved sources, or states
+                   plainly that the information is not available.
+
 Grounded in two places: the short-term case memory (facts + conversation of
 the current case) and the long-term vector store (it selects search_knowledge
 for tender/guidance questions, search_bids for bid-content questions, or no

@@ -74,16 +74,23 @@ def build_compliance_matrix(payload: ComplianceMatrixInput) -> dict:
     for supplier in suppliers:
         counts = {"compliant": 0, "partial": 0, "missing": 0, "not_assessed": 0}
         mandatory_missing = []
+        mandatory_unassessed = []
         for row in rows:
             status = row["cells"][supplier]["status"]
             counts[status] += 1
-            if row["kind"] == "mandatory" and status in ("missing", "partial"):
-                mandatory_missing.append(row["requirement_id"])
+            if row["kind"] == "mandatory":
+                if status in ("missing", "partial"):
+                    mandatory_missing.append(row["requirement_id"])
+                elif status == "not_assessed":
+                    mandatory_unassessed.append(row["requirement_id"])
         assessed = len(rows) - counts["not_assessed"]
         supplier_stats[supplier] = {
             "counts": counts,
             "mandatory_missing": mandatory_missing,
-            "disqualified": bool(mandatory_missing),
+            "mandatory_unassessed": mandatory_unassessed,
+            # Fail closed: a mandatory requirement that was never assessed
+            # cannot count as passed, so it also blocks qualification.
+            "disqualified": bool(mandatory_missing or mandatory_unassessed),
             "compliance_rate": round(counts["compliant"] / assessed, 3) if assessed else 0.0,
         }
 

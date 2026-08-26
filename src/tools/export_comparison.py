@@ -58,8 +58,23 @@ def export_comparison_csv(payload: ExportComparisonInput) -> dict:
 
         write(["MISSING MANDATORY REQUIREMENTS"])
         for supplier, stats in payload.matrix.get("supplier_stats", {}).items():
-            missing = ", ".join(stats.get("mandatory_missing", [])) or "none"
-            write([supplier, missing, "DISQUALIFIED" if stats.get("disqualified") else "qualified"])
+            gaps = stats.get("mandatory_missing", []) + [
+                f"{r} (not assessed)" for r in stats.get("mandatory_unassessed", [])
+            ]
+            write([supplier, ", ".join(gaps) or "none",
+                   "DISQUALIFIED" if stats.get("disqualified") else "qualified"])
+        write([])
+
+        write(["EVIDENCE TRAIL"])
+        write(["Requirement", "Supplier", "Status", "Evidence quote", "Source", "Note"])
+        for row in payload.matrix.get("rows", []):
+            for supplier in suppliers:
+                cell = row["cells"][supplier]
+                write([
+                    row["requirement_id"], supplier, cell["status"],
+                    cell.get("evidence_quote", ""), cell.get("source_file", ""),
+                    cell.get("note", ""),
+                ])
         write([])
 
         write(["WEIGHTED SCORES"])

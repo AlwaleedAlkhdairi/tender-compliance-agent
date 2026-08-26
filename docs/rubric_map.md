@@ -24,7 +24,7 @@ see `docs/architecture.md` §3.
 | Short-term memory preserves case/conversation info | `CaseMemory` (`src/memory/store.py`) + Case Q&A tab |
 | Knowledge source prepared, embeddings + vector store | `data/knowledge/`, `data/sample_cases/`, `scripts/ingest_knowledge.py`, `src/rag/vector_store.py` (Chroma) |
 | Retrieval results include source metadata | `RetrievedChunk` (file, section, chunk id) in `src/rag/retriever.py`; evidence events in the timeline; evidence trail tab |
-| Retrieved evidence used in decisions/final result | Compliance statuses cite bid quotes + sources (`EvidenceItem.source`); guidance passages drive material-deviation judgements; sources appear in the final report + CSV |
+| Retrieved evidence used in decisions/final result | Compliance statuses cite bid quotes + sources (`EvidenceItem.source`); guidance passages drive material-deviation judgements; sources appear in the UI evidence trail and the exported CSV's evidence section |
 
 ## 3.3 Agent Tools and Actions (10)
 

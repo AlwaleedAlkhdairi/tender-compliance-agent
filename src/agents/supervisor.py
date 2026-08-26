@@ -93,11 +93,25 @@ def plan(state: TenderState, emit: EventFn) -> SupervisorPlan:
 
 
 VALID_PREREQS = {
-    "requirement_specialist": lambda s: True,
-    "evidence_specialist": lambda s: bool(s.get("requirement_set")),
-    "comparison_specialist": lambda s: bool(s.get("compliance_matrix")),
-    "finalize": lambda s: True,
+    # A specialist may run when its input exists and it has not already run;
+    # finalize is valid once the comparison exists (or the case has failed).
+    "requirement_specialist": lambda s: "requirement_specialist" not in s["completed_agents"],
+    "evidence_specialist": lambda s: bool(s.get("requirement_set"))
+    and "evidence_specialist" not in s["completed_agents"],
+    "comparison_specialist": lambda s: bool(s.get("compliance_matrix"))
+    and "comparison_specialist" not in s["completed_agents"],
+    "finalize": lambda s: bool(s.get("comparison_result")) or s["status"] == "failed",
 }
+
+
+def _next_pending(state: TenderState) -> str:
+    if not state.get("requirement_set"):
+        return "requirement_specialist"
+    if not state.get("compliance_matrix"):
+        return "evidence_specialist"
+    if not state.get("comparison_result"):
+        return "comparison_specialist"
+    return "finalize"
 
 
 def route(state: TenderState, emit: EventFn) -> RouteDecision:
@@ -108,19 +122,16 @@ def route(state: TenderState, emit: EventFn) -> RouteDecision:
         output_model=RouteDecision,
     )
 
-    # Deterministic guardrail: an invalid delegation is corrected, not obeyed.
+    # Deterministic guardrail: an invalid delegation (missing prerequisite,
+    # re-running a finished specialist, finalizing early) is corrected, not obeyed.
     if not VALID_PREREQS[decision.next_agent](state):
-        fallback = (
-            "requirement_specialist" if not state.get("requirement_set")
-            else "evidence_specialist" if not state.get("compliance_matrix")
-            else "comparison_specialist"
-        )
+        fallback = _next_pending(state)
         emit(make_event("supervisor", "routing",
-                        f"Overrode invalid routing to {decision.next_agent} "
-                        f"(missing prerequisite); delegating to {fallback} instead"))
+                        f"Overrode invalid routing to {decision.next_agent}; "
+                        f"delegating to {fallback} instead"))
         return RouteDecision(
             next_agent=fallback,
-            reasoning=f"Corrected: {decision.next_agent} lacks its input; {fallback} must run first.",
+            reasoning=f"Corrected: routing to {decision.next_agent} is invalid here; {fallback} is next.",
         )
 
     emit(make_event("supervisor", "routing",

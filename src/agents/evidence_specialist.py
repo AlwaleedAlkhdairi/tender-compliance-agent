@@ -83,6 +83,7 @@ def _audit_one_supplier(
         system=SYSTEM,
         messages=result.messages + [{"role": "user", "content": FINALIZE}],
         output_model=SupplierFindings,
+        tool_names=["search_bids", "search_knowledge"],
     )
     findings.supplier = supplier  # keep the state key stable regardless of spelling
     missing = [i.requirement_id for i in findings.items if i.status == "missing"]
