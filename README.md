@@ -9,13 +9,13 @@ comparison — with every judgement traced back to its source document.
 > AI Systems Engineering* training program at **SDAIA Academy**
 > ([SDAIA Academy on GitHub](https://github.com/SDAIAAcademy)).
 
-## Team
+## Team — Group 5 (القروب 5)
 
-| Name | Role |
+| Name | |
 |---|---|
-| Alwaleed Alkhdairi | Team lead / development |
-| _Add teammate_ | _Add role_ |
-| _Add teammate_ | _Add role_ |
+| Alwaleed Alkhdairi | الوليد الخضري |
+| Ammar Al-Ahmadi | عمار الأحمدي |
+| Adel Al-Otaibi | عادل العتيبي |
 
 ---
 
