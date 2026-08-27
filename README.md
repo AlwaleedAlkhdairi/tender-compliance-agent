@@ -161,7 +161,7 @@ the app.
 | Component | Choice | Why |
 |---|---|---|
 | Language | Python 3.11+ | Course standard |
-| LLM | **Claude (`claude-opus-5`** by default, configurable) via the official `anthropic` SDK | Strong tool selection + structured outputs (`messages.parse`) |
+| LLM | **Claude** (`claude-opus-5`) via the official `anthropic` SDK, **or Google Gemini** (`gemini-3.7-flash`, free tier) via `google-genai` — selected by which key is in `.env` | Strong tool selection + structured outputs; the Gemini option runs the whole system at zero cost |
 | Orchestration | LangGraph `StateGraph` | Explicit state, conditional routing, visible delegation |
 | Vector store | Chroma (persistent, local) | Simple, no external service; local ONNX embeddings |
 | Validation | Pydantic v2 | Typed contracts + tool input validation |
@@ -210,8 +210,9 @@ python3 -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\a
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configure your API key
-cp .env.example .env            # then edit .env and set ANTHROPIC_API_KEY
+# 4. Configure ONE API key (Anthropic, or Google Gemini's free tier)
+cp .env.example .env            # then edit .env: set ANTHROPIC_API_KEY,
+                                # or GEMINI_API_KEY (from https://aistudio.google.com/)
 
 # 5. Build the knowledge base (first run downloads a small local embedding model)
 python scripts/ingest_knowledge.py
@@ -230,8 +231,10 @@ python -m pytest tests/ -q
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes | Claude API access |
-| `ANTHROPIC_MODEL` | no | Model id (default `claude-opus-5`) |
+| `ANTHROPIC_API_KEY` **or** `GEMINI_API_KEY` | one of them | LLM access (Anthropic Claude, or Google Gemini free tier) |
+| `LLM_PROVIDER` | no | Force `anthropic` or `gemini` when both keys are set |
+| `ANTHROPIC_MODEL` | no | Claude model id (default `claude-opus-5`) |
+| `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL` | no | Gemini model ids (default `gemini-3.7-flash`; fallback `gemini-3.5-flash-lite` takes over on overload or when the ~20-requests/day free cap of the newest flash models is spent, so a full run always completes) |
 | `MAX_TOKENS` | no | Max tokens per model response (default 16000) |
 | `CHROMA_DIR`, `OUTPUT_DIR` | no | Override storage locations |
 

@@ -61,17 +61,19 @@ def render_sidebar() -> dict:
 
     key_ok = config.api_key_present()
     kb_ok = index_ready()
+    provider = config.llm_provider()
+    key_name = "GEMINI_API_KEY" if provider == "gemini" else "ANTHROPIC_API_KEY"
 
     st.sidebar.subheader("Environment")
     st.sidebar.markdown(
-        f"{'🟢' if key_ok else '🔴'} Anthropic API key "
-        f"{'configured' if key_ok else 'missing — copy `.env.example` to `.env`'}"
+        f"{'🟢' if key_ok else '🔴'} {provider.capitalize()} API key "
+        f"{'configured' if key_ok else f'missing — set `{key_name}` in `.env`'}"
     )
     st.sidebar.markdown(
         f"{'🟢' if kb_ok else '🟠'} Knowledge base "
         f"{'ready' if kb_ok else 'not built yet'}"
     )
-    st.sidebar.caption(f"Model: `{config.ANTHROPIC_MODEL}`")
+    st.sidebar.caption(f"Model: `{config.active_model()}` ({provider})")
 
     # Outcome of the previous build, persisted across the rerun.
     build_result = st.session_state.pop("kb_build_result", None)
@@ -391,8 +393,9 @@ def run_analysis_tab(env: dict) -> None:
 
     ready = True
     if not env["key_ok"]:
-        st.error("Add your Anthropic API key to `.env` before running the analysis "
-                 "(copy `.env.example` to `.env` and fill in `ANTHROPIC_API_KEY`).")
+        st.error("Add an API key to `.env` before running the analysis: copy "
+                 "`.env.example` to `.env` and fill in `ANTHROPIC_API_KEY` "
+                 "or `GEMINI_API_KEY` (free tier).")
         ready = False
     if not env["kb_ok"]:
         st.warning("Build the knowledge base first (button in the sidebar) so the "
@@ -475,7 +478,7 @@ def case_qa_tab(env: dict) -> None:
     if not question:
         return
     if not env["key_ok"]:
-        st.error("An Anthropic API key is required for Q&A. Configure `.env` first.")
+        st.error("An LLM API key is required for Q&A. Configure `.env` first.")
         return
 
     with st.chat_message("user"):

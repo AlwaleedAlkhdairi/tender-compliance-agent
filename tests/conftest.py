@@ -15,3 +15,6 @@ def _pin_config(monkeypatch):
     monkeypatch.setattr(config, "CASES_DIR", config.PROJECT_ROOT / "data" / "sample_cases")
     monkeypatch.setattr(config, "MAX_SUPERVISOR_STEPS", 8)
     monkeypatch.setattr(config, "MAX_AGENT_TURNS", 12)
+    # Tests exercise the Anthropic code path with a faked client, regardless
+    # of which provider keys exist on the machine running them.
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")

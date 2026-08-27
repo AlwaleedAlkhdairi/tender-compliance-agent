@@ -92,12 +92,13 @@ class AgentRunResult:
 EventFn = Callable[[dict], None]
 
 
-def _emit_tool_events(agent: str, block, result_json: str, is_error: bool, emit: EventFn) -> None:
-    emit(make_event(agent, "tool_call", f"Called tool `{block.name}`", detail=block.input))
+def _emit_tool_events(agent: str, tool_name: str, tool_input: dict,
+                      result_json: str, is_error: bool, emit: EventFn) -> None:
+    emit(make_event(agent, "tool_call", f"Called tool `{tool_name}`", detail=tool_input))
     if is_error:
-        emit(make_event(agent, "error", f"Tool `{block.name}` returned an error", detail=result_json[:600]))
+        emit(make_event(agent, "error", f"Tool `{tool_name}` returned an error", detail=result_json[:600]))
         return
-    if block.name in ("search_knowledge", "search_bids"):
+    if tool_name in ("search_knowledge", "search_bids"):
         results = json.loads(result_json).get("results", [])
         sources = [
             {
@@ -110,7 +111,7 @@ def _emit_tool_events(agent: str, block, result_json: str, is_error: bool, emit:
         ]
         emit(make_event(agent, "evidence", f"Retrieved {len(results)} passages", detail=sources))
     else:
-        emit(make_event(agent, "tool_result", f"Tool `{block.name}` succeeded",
+        emit(make_event(agent, "tool_result", f"Tool `{tool_name}` succeeded",
                         detail=json.loads(result_json)))
 
 
@@ -123,6 +124,10 @@ def run_tool_loop(
     max_turns: int = config.MAX_AGENT_TURNS,
 ) -> AgentRunResult:
     """Run one specialist's ReAct loop until it stops calling tools."""
+    if config.llm_provider() == "gemini":
+        from src import gemini_llm
+        return gemini_llm.run_tool_loop(agent, system, user_prompt, tool_names, emit, max_turns)
+
     client = get_client()
     tools = anthropic_tool_defs(tool_names)
     messages: list = [{"role": "user", "content": user_prompt}]
@@ -152,7 +157,7 @@ def run_tool_loop(
                 if block.type != "tool_use":
                     continue
                 result_json, is_error = execute_tool(block.name, block.input)
-                _emit_tool_events(agent, block, result_json, is_error, emit)
+                _emit_tool_events(agent, block.name, block.input, result_json, is_error, emit)
                 run.tool_calls.append(
                     ToolCallRecord(
                         name=block.name,
@@ -204,6 +209,10 @@ def structured_call(
     the request does not define). `tool_choice: none` keeps the model from
     answering with another tool call instead of the structured output.
     """
+    if config.llm_provider() == "gemini":
+        from src import gemini_llm
+        return gemini_llm.structured_call(agent, system, messages, output_model, tool_names)
+
     client = get_client()
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]
