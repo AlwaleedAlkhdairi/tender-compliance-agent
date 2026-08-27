@@ -9,13 +9,13 @@ comparison — with every judgement traced back to its source document.
 > AI Systems Engineering* training program at **SDAIA Academy**
 > ([SDAIA Academy on GitHub](https://github.com/SDAIAAcademy)).
 
-## Team
+## Team — Group 5 (القروب 5)
 
-| Name | Role |
+| Name | |
 |---|---|
-| Alwaleed Alkhdairi | Team lead / development |
-| _Add teammate_ | _Add role_ |
-| _Add teammate_ | _Add role_ |
+| Alwaleed Alkhdairi | الوليد الخضري |
+| Ammar Al-Ahmadi | عمار الأحمدي |
+| Adel Al-Otaibi | عادل العتيبي |
 
 ---
 
@@ -161,7 +161,7 @@ the app.
 | Component | Choice | Why |
 |---|---|---|
 | Language | Python 3.11+ | Course standard |
-| LLM | **Claude (`claude-opus-5`** by default, configurable) via the official `anthropic` SDK | Strong tool selection + structured outputs (`messages.parse`) |
+| LLM | **Claude** (`claude-opus-5`) via the official `anthropic` SDK, **or Google Gemini** (`gemini-3.7-flash`, free tier) via `google-genai` — selected by which key is in `.env` | Strong tool selection + structured outputs; the Gemini option runs the whole system at zero cost |
 | Orchestration | LangGraph `StateGraph` | Explicit state, conditional routing, visible delegation |
 | Vector store | Chroma (persistent, local) | Simple, no external service; local ONNX embeddings |
 | Validation | Pydantic v2 | Typed contracts + tool input validation |
@@ -210,8 +210,9 @@ python3 -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\a
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configure your API key
-cp .env.example .env            # then edit .env and set ANTHROPIC_API_KEY
+# 4. Configure ONE API key (Anthropic, or Google Gemini's free tier)
+cp .env.example .env            # then edit .env: set ANTHROPIC_API_KEY,
+                                # or GEMINI_API_KEY (from https://aistudio.google.com/)
 
 # 5. Build the knowledge base (first run downloads a small local embedding model)
 python scripts/ingest_knowledge.py
@@ -230,8 +231,10 @@ python -m pytest tests/ -q
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes | Claude API access |
-| `ANTHROPIC_MODEL` | no | Model id (default `claude-opus-5`) |
+| `ANTHROPIC_API_KEY` **or** `GEMINI_API_KEY` | one of them | LLM access (Anthropic Claude, or Google Gemini free tier) |
+| `LLM_PROVIDER` | no | Force `anthropic` or `gemini` when both keys are set |
+| `ANTHROPIC_MODEL` | no | Claude model id (default `claude-opus-5`) |
+| `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL` | no | Gemini model ids (default `gemini-3.7-flash`; fallback `gemini-3.5-flash-lite` takes over on overload or when the ~20-requests/day free cap of the newest flash models is spent, so a full run always completes) |
 | `MAX_TOKENS` | no | Max tokens per model response (default 16000) |
 | `CHROMA_DIR`, `OUTPUT_DIR` | no | Override storage locations |
 
@@ -273,6 +276,11 @@ Evaluating **RFP-2026-014** with all three suppliers is expected to produce:
 (The agents' judgements — compliance statuses and per-criterion scores — can
 vary slightly between runs; the weighting arithmetic, ranking rules and
 disqualification logic are deterministic tools.)
+
+This scenario has been verified in a full live run on the Gemini free tier
+(`python scripts/run_case_cli.py`): AlphaTech ranked first (90.9), GammaWave
+second (82.3), and BetaGrid was disqualified on mandatory requirements
+M1–M5, with the comparison CSV exported.
 
 ### Failure handling you can demo
 

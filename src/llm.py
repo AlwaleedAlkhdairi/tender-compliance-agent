@@ -91,13 +91,23 @@ class AgentRunResult:
 
 EventFn = Callable[[dict], None]
 
+# Injected when the ReAct turn budget is nearly spent, so the agent concludes
+# instead of researching forever; if it still doesn't, the loop ends and the
+# evidence gathered so far is used (per-agent invariants catch missing results).
+BUDGET_NUDGE = (
+    "Note: your tool-turn budget is nearly exhausted. Stop researching now and "
+    "give your final summary in your next reply, without further tool calls."
+)
+BUDGET_EXHAUSTED_NOTE = "Turn budget reached — concluding with the evidence gathered so far"
 
-def _emit_tool_events(agent: str, block, result_json: str, is_error: bool, emit: EventFn) -> None:
-    emit(make_event(agent, "tool_call", f"Called tool `{block.name}`", detail=block.input))
+
+def _emit_tool_events(agent: str, tool_name: str, tool_input: dict,
+                      result_json: str, is_error: bool, emit: EventFn) -> None:
+    emit(make_event(agent, "tool_call", f"Called tool `{tool_name}`", detail=tool_input))
     if is_error:
-        emit(make_event(agent, "error", f"Tool `{block.name}` returned an error", detail=result_json[:600]))
+        emit(make_event(agent, "error", f"Tool `{tool_name}` returned an error", detail=result_json[:600]))
         return
-    if block.name in ("search_knowledge", "search_bids"):
+    if tool_name in ("search_knowledge", "search_bids"):
         results = json.loads(result_json).get("results", [])
         sources = [
             {
@@ -110,7 +120,7 @@ def _emit_tool_events(agent: str, block, result_json: str, is_error: bool, emit:
         ]
         emit(make_event(agent, "evidence", f"Retrieved {len(results)} passages", detail=sources))
     else:
-        emit(make_event(agent, "tool_result", f"Tool `{block.name}` succeeded",
+        emit(make_event(agent, "tool_result", f"Tool `{tool_name}` succeeded",
                         detail=json.loads(result_json)))
 
 
@@ -123,12 +133,16 @@ def run_tool_loop(
     max_turns: int = config.MAX_AGENT_TURNS,
 ) -> AgentRunResult:
     """Run one specialist's ReAct loop until it stops calling tools."""
+    if config.llm_provider() == "gemini":
+        from src import gemini_llm
+        return gemini_llm.run_tool_loop(agent, system, user_prompt, tool_names, emit, max_turns)
+
     client = get_client()
     tools = anthropic_tool_defs(tool_names)
     messages: list = [{"role": "user", "content": user_prompt}]
     run = AgentRunResult(final_text="", messages=messages)
 
-    for _ in range(max_turns):
+    for turn in range(max_turns):
         try:
             response = client.messages.create(
                 model=config.ANTHROPIC_MODEL,
@@ -152,7 +166,7 @@ def run_tool_loop(
                 if block.type != "tool_use":
                     continue
                 result_json, is_error = execute_tool(block.name, block.input)
-                _emit_tool_events(agent, block, result_json, is_error, emit)
+                _emit_tool_events(agent, block.name, block.input, result_json, is_error, emit)
                 run.tool_calls.append(
                     ToolCallRecord(
                         name=block.name,
@@ -170,6 +184,8 @@ def run_tool_loop(
                     }
                 )
             messages.append({"role": "user", "content": tool_results})
+            if turn == max_turns - 2:
+                messages.append({"role": "user", "content": BUDGET_NUDGE})
             continue
 
         if response.stop_reason == "max_tokens":
@@ -184,10 +200,10 @@ def run_tool_loop(
         messages.append({"role": "assistant", "content": response.content})
         return run
 
-    raise AgentError(
-        f"The {agent} did not finish within {max_turns} turns. "
-        "This is the workflow's safety bound; try a smaller request."
-    )
+    # Safety bound reached: stop researching and work with what was gathered.
+    emit(make_event(agent, "reasoning", BUDGET_EXHAUSTED_NOTE))
+    run.final_text = BUDGET_EXHAUSTED_NOTE
+    return run
 
 
 def structured_call(
@@ -204,6 +220,10 @@ def structured_call(
     the request does not define). `tool_choice: none` keeps the model from
     answering with another tool call instead of the structured output.
     """
+    if config.llm_provider() == "gemini":
+        from src import gemini_llm
+        return gemini_llm.structured_call(agent, system, messages, output_model, tool_names)
+
     client = get_client()
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]

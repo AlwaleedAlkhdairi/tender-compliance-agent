@@ -54,10 +54,20 @@ The split of authority is deliberate: **agents make judgements, tools do
 arithmetic**. The model never computes weighted totals — `calculate_weighted_score`
 does, so rankings are reproducible and auditable.
 
-## 4. LLM Integration (`src/llm.py`)
+## 4. LLM Integration (`src/llm.py`, `src/gemini_llm.py`)
 
-- Official `anthropic` SDK (v1.x), model configurable via `ANTHROPIC_MODEL`
-  (default `claude-opus-5`).
+- Two interchangeable providers behind the same two primitives
+  (`run_tool_loop`, `structured_call`): the official `anthropic` SDK (v1.x,
+  default `claude-opus-5`) and Google's `google-genai` SDK (default
+  `gemini-3.7-flash`, free tier). `config.llm_provider()` picks by
+  `LLM_PROVIDER` or by which key is configured; agents, tools, graph and UI
+  are provider-agnostic.
+- The Gemini backend converts the registry's Pydantic tool schemas to
+  Gemini-compatible declarations ($refs inlined, unsupported keys removed),
+  retries 429/500/503 with backoff, falls back to `GEMINI_FALLBACK_MODEL`
+  when the primary is overloaded, and renders tool transcripts as text for
+  structured-output calls (Gemini does not combine function calling with
+  `response_schema`).
 - `run_tool_loop`: a bounded manual tool-use loop. Handles `tool_use` /
   `end_turn` / `max_tokens` / `refusal` stop reasons; executes tools through
   the validated registry; failed tools return `is_error` tool results so the

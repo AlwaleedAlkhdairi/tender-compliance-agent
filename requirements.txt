@@ -1,5 +1,6 @@
-# Core LLM + orchestration
+# Core LLM + orchestration (either provider works; see .env.example)
 anthropic>=1.0.0
+google-genai>=2.0.0
 langgraph>=0.2.60
 
 # RAG
