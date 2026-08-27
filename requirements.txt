@@ -1,0 +1,15 @@
+# Core LLM + orchestration
+anthropic>=1.0.0
+langgraph>=0.2.60
+
+# RAG
+chromadb>=0.5.20
+
+# App + data
+streamlit>=1.40.0
+pandas>=2.2.0
+pydantic>=2.8.0
+python-dotenv>=1.0.1
+
+# Testing
+pytest>=8.0.0

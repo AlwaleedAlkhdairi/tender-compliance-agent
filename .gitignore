@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific: local vector store and generated exports
+data/chroma/
+outputs/
+
+# Raw screenshot captures (SVG-wrapped versions are committed instead)
+docs/screenshots/*.png
