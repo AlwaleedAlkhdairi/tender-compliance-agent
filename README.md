@@ -277,6 +277,11 @@ Evaluating **RFP-2026-014** with all three suppliers is expected to produce:
 vary slightly between runs; the weighting arithmetic, ranking rules and
 disqualification logic are deterministic tools.)
 
+This scenario has been verified in a full live run on the Gemini free tier
+(`python scripts/run_case_cli.py`): AlphaTech ranked first (90.9), GammaWave
+second (82.3), and BetaGrid was disqualified on mandatory requirements
+M1–M5, with the comparison CSV exported.
+
 ### Failure handling you can demo
 
 - No API key → clear red status + instructions (run button disabled).
