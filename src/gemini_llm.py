@@ -28,6 +28,8 @@ from google.genai import types
 from src import config
 from src.graph.state import make_event
 from src.llm import (
+    BUDGET_EXHAUSTED_NOTE,
+    BUDGET_NUDGE,
     M,
     AgentError,
     AgentRunResult,
@@ -198,7 +200,7 @@ def run_tool_loop(
     contents: list = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
     run = AgentRunResult(final_text="", messages=contents)
 
-    for _ in range(max_turns):
+    for turn in range(max_turns):
         response = _generate(contents, gen_config)
         _check_blocked(response)
         candidate = response.candidates[0] if response.candidates else None
@@ -234,11 +236,15 @@ def run_tool_loop(
                 types.Part.from_function_response(name=call.name, response=payload)
             )
         contents.append(types.Content(role="user", parts=result_parts))
+        if turn == max_turns - 2:
+            contents.append(
+                types.Content(role="user", parts=[types.Part(text=BUDGET_NUDGE)])
+            )
 
-    raise AgentError(
-        f"The {agent} did not finish within {max_turns} turns. "
-        "This is the workflow's safety bound; try a smaller request."
-    )
+    # Safety bound reached: stop researching and work with what was gathered.
+    emit(make_event(agent, "reasoning", BUDGET_EXHAUSTED_NOTE))
+    run.final_text = BUDGET_EXHAUSTED_NOTE
+    return run
 
 
 def _flatten_for_structured(contents: list[types.Content]) -> list[types.Content]:

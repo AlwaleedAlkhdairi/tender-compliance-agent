@@ -91,6 +91,15 @@ class AgentRunResult:
 
 EventFn = Callable[[dict], None]
 
+# Injected when the ReAct turn budget is nearly spent, so the agent concludes
+# instead of researching forever; if it still doesn't, the loop ends and the
+# evidence gathered so far is used (per-agent invariants catch missing results).
+BUDGET_NUDGE = (
+    "Note: your tool-turn budget is nearly exhausted. Stop researching now and "
+    "give your final summary in your next reply, without further tool calls."
+)
+BUDGET_EXHAUSTED_NOTE = "Turn budget reached — concluding with the evidence gathered so far"
+
 
 def _emit_tool_events(agent: str, tool_name: str, tool_input: dict,
                       result_json: str, is_error: bool, emit: EventFn) -> None:
@@ -133,7 +142,7 @@ def run_tool_loop(
     messages: list = [{"role": "user", "content": user_prompt}]
     run = AgentRunResult(final_text="", messages=messages)
 
-    for _ in range(max_turns):
+    for turn in range(max_turns):
         try:
             response = client.messages.create(
                 model=config.ANTHROPIC_MODEL,
@@ -175,6 +184,8 @@ def run_tool_loop(
                     }
                 )
             messages.append({"role": "user", "content": tool_results})
+            if turn == max_turns - 2:
+                messages.append({"role": "user", "content": BUDGET_NUDGE})
             continue
 
         if response.stop_reason == "max_tokens":
@@ -189,10 +200,10 @@ def run_tool_loop(
         messages.append({"role": "assistant", "content": response.content})
         return run
 
-    raise AgentError(
-        f"The {agent} did not finish within {max_turns} turns. "
-        "This is the workflow's safety bound; try a smaller request."
-    )
+    # Safety bound reached: stop researching and work with what was gathered.
+    emit(make_event(agent, "reasoning", BUDGET_EXHAUSTED_NOTE))
+    run.final_text = BUDGET_EXHAUSTED_NOTE
+    return run
 
 
 def structured_call(

@@ -118,15 +118,23 @@ class TestRunToolLoop:
         assert evidence["detail"][0]["source_file"] == "bid_x.md"
         assert evidence["detail"][0]["section"] == "Warranty"
 
-    def test_turn_budget_exhaustion_raises(self, monkeypatch):
-        install_fake_client(monkeypatch, [
+    def test_turn_budget_nudges_then_concludes_gracefully(self, monkeypatch):
+        fake = install_fake_client(monkeypatch, [
             response([tool_use_block("calculate_weighted_score", VALID_SCORE_INPUT,
                                      block_id=f"tu_{i}")], stop_reason="tool_use")
             for i in range(3)
         ])
-        with pytest.raises(AgentError, match="did not finish within 3 turns"):
-            run_tool_loop("tester", "system", "loop forever",
-                          ["calculate_weighted_score"], emit=lambda e: None, max_turns=3)
+        events = []
+        run = run_tool_loop("tester", "system", "loop forever",
+                            ["calculate_weighted_score"], emit=events.append, max_turns=3)
+        # The loop ends without an exception, keeping the gathered evidence...
+        assert len(run.tool_calls) == 3
+        assert run.final_text == llm.BUDGET_EXHAUSTED_NOTE
+        assert events[-1]["summary"] == llm.BUDGET_EXHAUSTED_NOTE
+        # ...and the agent was warned one turn before the budget ran out.
+        nudges = [m for m in run.messages
+                  if m["role"] == "user" and m["content"] == llm.BUDGET_NUDGE]
+        assert len(nudges) == 1
 
     def test_refusal_raises_clear_error(self, monkeypatch):
         install_fake_client(monkeypatch, [
